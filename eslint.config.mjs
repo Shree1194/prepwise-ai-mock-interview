@@ -1,16 +1,60 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
+import nextPlugin from "@next/eslint-plugin-next";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+export default [
+  {
+    ignores: [
+      ".next/**",
+      ".next-*/**",
+      ".prepwise-build-core/**",
+      "node_modules/**",
+      "scripts/**",
+      "public/**",
+    ],
+  },
+  {
+    plugins: {
+      "@next/next": nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs["core-web-vitals"].rules,
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
+    },
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module",
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    rules: {
+      // TypeScript
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-explicit-any": "off",
 
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
+      // React
+      "react/react-in-jsx-scope": "off",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
 
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+      // General
+      "no-console": "off",
+      "prefer-const": "warn",
+    },
+    settings: {
+      react: { version: "detect" },
+    },
+  },
 ];
-
-export default eslintConfig;

@@ -29,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${monaSans.className} antialiased`} style={{ background: "#020408" }}>
+      <body className={`${monaSans.className} antialiased`}>
         {children}
         <Toaster richColors position="top-right" />
       </body>

@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { etcSubjects, ETCSubject, getQuestionsForSubject } from "@/constants/etcSubjects";
+import { etcSubjects, LegacyETCSubject as ETCSubject, getQuestionsForSubject } from "@/constants/etcSubjects";
 
 interface SubjectSelectorProps {
   userId: string;
   userName: string;
 }
 
-const SubjectSelector = ({ userId, userName }: SubjectSelectorProps) => {
+const SubjectSelector = ({ userId, userName: _userName }: SubjectSelectorProps) => {
   const router = useRouter();
   const [selected, setSelected] = useState<ETCSubject | null>(null);
   const [questionCount, setQuestionCount] = useState(5);

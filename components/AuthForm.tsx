@@ -11,7 +11,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
 } from "firebase/auth";
 
 import { Form } from "@/components/ui/form";
@@ -19,12 +21,20 @@ import { Button } from "@/components/ui/button";
 
 import { signIn, signUp } from "@/lib/actions/auth.action";
 import FormField from "./FormField";
+import {
+  FormControl,
+  FormField as ControlledFormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 
 const authFormSchema = (type: FormType) => {
   return z.object({
     name: type === "sign-up" ? z.string().min(3) : z.string().optional(),
     email: z.string().email(),
-    password: z.string().min(3),
+    password: z.string().min(8),
   });
 };
 
@@ -56,10 +66,11 @@ const AuthForm = ({ type }: { type: FormType }) => {
           uid: userCredential.user.uid,
           name: name!,
           email,
-          password,
+          idToken: await userCredential.user.getIdToken(),
         });
 
         if (!result.success) {
+          await deleteUser(userCredential.user).catch(() => undefined);
           toast.error(result.message);
           return;
         }
@@ -81,37 +92,38 @@ const AuthForm = ({ type }: { type: FormType }) => {
           return;
         }
 
-        await signIn({
+        const result = await signIn({
           email,
           idToken,
         });
 
+        if (!result?.success) {
+          await firebaseSignOut(auth).catch(() => undefined);
+          toast.error(result?.message ?? "Sign in failed. Please try again.");
+          return;
+        }
+
         toast.success("Signed in successfully.");
         router.push("/");
       }
-    } catch (error) {
-      console.log(error);
-      toast.error(`There was an error: ${error}`);
+    } catch {
+      toast.error("Authentication failed. Please check your details and try again.");
     }
   };
 
   const isSignIn = type === "sign-in";
 
   return (
-    <div
-      className="w-full max-w-md"
-      style={{
-        background: "rgba(255, 255, 255, 0.04)",
-        backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
-        borderRadius: "24px",
-        padding: "2.5rem 2rem",
-      }}
-    >
+    <div className="auth-card w-full max-w-md">
       {/* Logo & Branding */}
       <div className="flex flex-col items-center gap-3 mb-8">
         <div className="flex flex-row gap-2 items-center">
-          <Image src="/logo.svg" alt="PrepWise Logo" height={36} width={42} />
+          <Image
+            src="/logo.svg"
+            alt="PrepWise Logo"
+            height={34}
+            width={39}
+          />
           <div>
             <h2
               className="text-primary-100 leading-tight"
@@ -125,7 +137,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
 
         <div className="text-center">
           <h3 className="text-xl text-white mb-1">
-            {isSignIn ? "Welcome Back 👋" : "Create Account 🚀"}
+            {isSignIn ? "Welcome back" : "Create your account"}
           </h3>
           <p className="text-sm text-light-100">
             {isSignIn
@@ -135,23 +147,6 @@ const AuthForm = ({ type }: { type: FormType }) => {
         </div>
       </div>
 
-      {/* Subjects Preview */}
-      <div className="flex gap-2 justify-center flex-wrap mb-6">
-        {["📡 Digital Comm", "⚡ Electronics", "🔲 8051/ARM"].map((s) => (
-          <span
-            key={s}
-            className="text-xs px-3 py-1 rounded-full"
-            style={{
-              background: "rgba(99, 102, 241, 0.15)",
-              border: "1px solid rgba(99, 102, 241, 0.3)",
-              color: "#a5b4fc",
-            }}
-          >
-            {s}
-          </span>
-        ))}
-      </div>
-
       {/* Form */}
       <Form {...form}>
         <form
@@ -159,12 +154,24 @@ const AuthForm = ({ type }: { type: FormType }) => {
           className="w-full space-y-4 form"
         >
           {!isSignIn && (
-            <FormField
+            <ControlledFormField
               control={form.control}
               name="name"
-              label="Full Name"
-              placeholder="Your full name"
-              type="text"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="label">Full Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      className="input"
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Your full name"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           )}
 
@@ -182,10 +189,11 @@ const AuthForm = ({ type }: { type: FormType }) => {
             label="Password"
             placeholder="Enter your password"
             type="password"
+            autoComplete={isSignIn ? "current-password" : "new-password"}
           />
 
-          <Button className="btn" type="submit">
-            {isSignIn ? "Sign In" : "Create Account"}
+          <Button className="btn" type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Please wait..." : isSignIn ? "Sign In" : "Create Account"}
           </Button>
         </form>
       </Form>

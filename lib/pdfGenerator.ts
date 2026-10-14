@@ -29,24 +29,6 @@ export function generatePDFReport(data: PDFReportData): void {
   const contentWidth = pageWidth - 2 * margin;
   let y = margin;
 
-  // Helper: add text with word wrap
-  const addText = (
-    text: string,
-    x: number,
-    startY: number,
-    maxWidth: number,
-    fontSize = 10,
-    fontStyle: "normal" | "bold" | "italic" = "normal",
-    color: [number, number, number] = [30, 30, 50]
-  ): number => {
-    doc.setFontSize(fontSize);
-    doc.setFont("helvetica", fontStyle);
-    doc.setTextColor(...color);
-    const lines = doc.splitTextToSize(text, maxWidth);
-    doc.text(lines, x, startY);
-    return startY + lines.length * (fontSize * 0.4 + 1);
-  };
-
   const checkPageBreak = (neededHeight: number) => {
     if (y + neededHeight > pageHeight - margin) {
       doc.addPage();

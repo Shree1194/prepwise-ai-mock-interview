@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
@@ -16,6 +16,10 @@ enum CallStatus {
   FINISHED = "FINISHED",
 }
 
+const CONNECTION_SLOW_MS = 8000;
+const CONNECTION_TIMEOUT_MS = 25000;
+const VAPI_RESET_DELAY_MS = 400;
+
 interface SavedMessage {
   role: "user" | "system" | "assistant";
   content: string;
@@ -27,6 +31,102 @@ const formatTime = (seconds: number): string => {
     .padStart(2, "0");
   const s = (seconds % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
+};
+
+const getNestedValue = (value: unknown, path: string[]): unknown => {
+  return path.reduce<unknown>((current, key) => {
+    if (!current || typeof current !== "object") return undefined;
+    return (current as Record<string, unknown>)[key];
+  }, value);
+};
+
+const getConnectionErrorMessage = (error: unknown): string => {
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : [
+          getNestedValue(error, ["error", "message"]),
+          getNestedValue(error, ["error", "errorMsg"]),
+          getNestedValue(error, ["message"]),
+          getNestedValue(error, ["errorMsg"]),
+          getNestedValue(error, ["type"]),
+          getNestedValue(error, ["stage"]),
+        ].find((value): value is string => typeof value === "string" && value.length > 0);
+
+  if (rawMessage) {
+    const message = rawMessage.toLowerCase();
+
+    if (message.includes("permission") || message.includes("microphone")) {
+      return "Microphone access is blocked. Please allow microphone permission in the browser and try again.";
+    }
+
+    if (message.includes("assistant-not-found") || message.includes("assistant not found")) {
+      return "Vapi could not find the assistant. Check that the app is using the correct assistant or workflow ID.";
+    }
+
+    if (message.includes("workflow") && message.includes("not found")) {
+      return "Vapi could not find the workflow. Check NEXT_PUBLIC_VAPI_WORKFLOW_ID and save the workflow in Vapi.";
+    }
+
+    if (message.includes("unauthorized") || message.includes("401")) {
+      return "Vapi rejected the web token. Check NEXT_PUBLIC_VAPI_WEB_TOKEN and restart the server.";
+    }
+
+    if (message.includes("insufficient") || message.includes("credits") || message.includes("quota")) {
+      return "Vapi could not start because the provider has insufficient credits or quota.";
+    }
+
+    if (message.includes("timeout")) {
+      return "The AI interviewer took too long to connect. Please check your network and try again.";
+    }
+
+    return rawMessage;
+  }
+
+  return "Unable to connect to the AI interviewer. Please try again.";
+};
+
+const withConnectionTimeout = async <T,>(startCall: Promise<T>): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      startCall,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("Vapi connection timeout"));
+        }, CONNECTION_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const stopVapiSilently = async () => {
+  try {
+    await vapi.stop();
+  } catch {
+    // Best-effort cleanup for stale SDK state.
+  }
+};
+
+const startWithStaleCallRecovery = async (
+  startCall: () => Promise<unknown>
+) => {
+  let call = await withConnectionTimeout(startCall());
+  if (call) return call;
+
+  await stopVapiSilently();
+  await delay(VAPI_RESET_DELAY_MS);
+
+  call = await withConnectionTimeout(startCall());
+  if (call) return call;
+
+  await stopVapiSilently();
+  return null;
 };
 
 const Agent = ({
@@ -45,6 +145,12 @@ const Agent = ({
   const [elapsedTime, setElapsedTime] = useState(0);
   const [questionCount, setQuestionCount] = useState(0);
   const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+  const [saveAttempt, setSaveAttempt] = useState(0);
+  const savingRef = useRef(false);
+  const messagesRef = useRef<SavedMessage[]>([]);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [showSlowConnectionHint, setShowSlowConnectionHint] = useState(false);
+  const isStartingRef = useRef(false);
 
   // Timer effect
   useEffect(() => {
@@ -59,18 +165,25 @@ const Agent = ({
 
   useEffect(() => {
     const onCallStart = () => {
+      isStartingRef.current = false;
       setCallStatus(CallStatus.ACTIVE);
       setElapsedTime(0);
+      setConnectionError(null);
+      setShowSlowConnectionHint(false);
     };
 
     const onCallEnd = () => {
+      isStartingRef.current = false;
       setCallStatus(CallStatus.FINISHED);
+      setIsSpeaking(false);
+      setShowSlowConnectionHint(false);
     };
 
     const onMessage = (message: Message) => {
       if (message.type === "transcript" && message.transcriptType === "final") {
         const newMessage = { role: message.role, content: message.transcript };
-        setMessages((prev) => [...prev, newMessage]);
+        messagesRef.current = [...messagesRef.current, newMessage];
+        setMessages(messagesRef.current);
         if (message.role === "assistant") {
           setQuestionCount((c) => c + 1);
         }
@@ -86,7 +199,14 @@ const Agent = ({
     };
 
     const onError = (error: Error) => {
-      console.log("Error:", error);
+      isStartingRef.current = false;
+      setConnectionError(getConnectionErrorMessage(error));
+      setIsSpeaking(false);
+      setShowSlowConnectionHint(false);
+      setCallStatus((status) =>
+        status === CallStatus.CONNECTING ? CallStatus.INACTIVE : status
+      );
+      void stopVapiSilently();
     };
 
     vapi.on("call-start", onCallStart);
@@ -107,24 +227,41 @@ const Agent = ({
   }, []);
 
   useEffect(() => {
+    if (callStatus !== CallStatus.CONNECTING) {
+      setShowSlowConnectionHint(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setShowSlowConnectionHint(true);
+    }, CONNECTION_SLOW_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [callStatus]);
+
+  useEffect(() => {
     if (messages.length > 0) {
       setLastMessage(messages[messages.length - 1].content);
     }
 
     const handleGenerateFeedback = async (messages: SavedMessage[]) => {
+      if (savingRef.current) return;
+      if (!messages.some(message => message.role === "user" && message.content.trim())) {
+        setConnectionError("No answers were recorded. Start a new call and allow microphone access.");
+        return;
+      }
+      savingRef.current = true;
       setIsGeneratingFeedback(true);
-      const { success, feedbackId: id } = await createFeedback({
-        interviewId: interviewId!,
-        userId: userId!,
-        transcript: messages,
-        feedbackId,
-      });
-
-      if (success && id) {
+      try {
+        const { success, feedbackId: id } = await createFeedback({
+          interviewId: interviewId!, userId: userId!, transcript: messages, feedbackId,
+        });
+        if (!success || !id) throw new Error("Save failed");
         router.push(`/interview/${interviewId}/feedback`);
-      } else {
-        console.log("Error saving feedback");
-        router.push("/");
+      } catch {
+        setConnectionError("Your feedback could not be saved. Keep this page open and retry saving below.");
+        setIsGeneratingFeedback(false);
+        savingRef.current = false;
       }
     };
 
@@ -132,40 +269,100 @@ const Agent = ({
       if (type === "generate") {
         router.push("/");
       } else {
-        handleGenerateFeedback(messages);
+        handleGenerateFeedback(messagesRef.current);
       }
     }
-  }, [messages, callStatus, feedbackId, interviewId, router, type, userId]);
+  }, [messages, callStatus, feedbackId, interviewId, router, type, userId, saveAttempt]);
 
   const handleCall = async () => {
+    if (
+      isStartingRef.current ||
+      callStatus === CallStatus.CONNECTING ||
+      callStatus === CallStatus.ACTIVE
+    ) {
+      return;
+    }
+
+    const token = process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN;
+    const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+
+    if (!token) {
+      setConnectionError("Vapi web token is missing. Add NEXT_PUBLIC_VAPI_WEB_TOKEN and restart the server.");
+      return;
+    }
+
+    if (type === "generate" && !workflowId) {
+      setConnectionError("Vapi workflow ID is missing. Add NEXT_PUBLIC_VAPI_WORKFLOW_ID and restart the server.");
+      return;
+    }
+
+    setConnectionError(null);
+    setShowSlowConnectionHint(false);
+    isStartingRef.current = true;
     setCallStatus(CallStatus.CONNECTING);
 
-    if (type === "generate") {
-      await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
-        variableValues: {
-          username: userName,
-          userid: userId,
-        },
-      });
-    } else {
-      let formattedQuestions = "";
-      if (questions) {
-        formattedQuestions = questions
-          .map((question) => `- ${question}`)
-          .join("\n");
-      }
+    try {
+      await stopVapiSilently();
+      await delay(VAPI_RESET_DELAY_MS);
 
-      await vapi.start(interviewer, {
-        variableValues: {
-          questions: formattedQuestions,
-        },
-      });
+      if (type === "generate") {
+        const call = await startWithStaleCallRecovery(() =>
+          vapi.start(
+            undefined,
+            undefined,
+            undefined,
+            workflowId!,
+            {
+              variableValues: {
+                username: userName,
+                userid: userId,
+              },
+            }
+          )
+        );
+        if (!call) {
+          setCallStatus(CallStatus.INACTIVE);
+          setConnectionError("The previous AI interviewer connection could not be cleared automatically. Please refresh the page and try again.");
+          return;
+        }
+      } else {
+        let formattedQuestions = "";
+        if (questions) {
+          formattedQuestions = questions
+            .map((question) => `- ${question}`)
+            .join("\n");
+        }
+
+        const call = await startWithStaleCallRecovery(() =>
+          vapi.start(interviewer, {
+            variableValues: {
+              questions: formattedQuestions,
+            },
+          })
+        );
+        if (!call) {
+          setCallStatus(CallStatus.INACTIVE);
+          setConnectionError("The previous AI interviewer connection could not be cleared automatically. Please refresh the page and try again.");
+          return;
+        }
+      }
+    } catch (error) {
+      setConnectionError(getConnectionErrorMessage(error));
+      setCallStatus(CallStatus.INACTIVE);
+      setIsSpeaking(false);
+      setShowSlowConnectionHint(false);
+      await stopVapiSilently();
+    } finally {
+      isStartingRef.current = false;
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    isStartingRef.current = false;
+    setConnectionError(null);
+    setShowSlowConnectionHint(false);
+    await stopVapiSilently();
     setCallStatus(CallStatus.FINISHED);
-    vapi.stop();
   };
 
   const isActive = callStatus === CallStatus.ACTIVE;
@@ -174,6 +371,7 @@ const Agent = ({
 
   return (
     <div className="w-full flex flex-col gap-6 relative min-h-[400px]">
+      {isFinished && connectionError && messages.some(message => message.role === "user") && !isGeneratingFeedback && <button className="btn-primary" onClick={() => setSaveAttempt(attempt => attempt + 1)}>Retry saving feedback</button>}
       {/* Loading Overlay when generating feedback */}
       {isGeneratingFeedback && (
         <div className="absolute -inset-4 bg-[#0a0f18]/90 backdrop-blur-md z-50 flex flex-col items-center justify-center rounded-xl animate-fadeIn">
@@ -330,6 +528,15 @@ const Agent = ({
         )}
       </div>
 
+      {connectionError && (
+        <div
+          role="alert"
+          className="mx-auto max-w-xl rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-3 text-center text-sm text-red-100"
+        >
+          {connectionError}
+        </div>
+      )}
+
       {/* Loading Overlay when connecting */}
       {isConnecting && (
         <div className="flex flex-col items-center gap-3 animate-fadeIn">
@@ -342,7 +549,11 @@ const Agent = ({
               />
             ))}
           </div>
-          <p className="text-light-100 text-sm">Initializing AI interviewer...</p>
+          <p className="max-w-md text-center text-light-100 text-sm">
+            {showSlowConnectionHint
+              ? "Still connecting. Allow microphone access if prompted, and check your network if this continues."
+              : "Initializing AI interviewer..."}
+          </p>
         </div>
       )}
     </div>

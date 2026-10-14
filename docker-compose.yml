@@ -1,0 +1,13 @@
+services:
+  prepwise:
+    build:
+      context: .
+    env_file:
+      - ${PREPWISE_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      JUDGE0_API_BASE_URL: ${JUDGE0_API_BASE_URL:-https://ce.judge0.com}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

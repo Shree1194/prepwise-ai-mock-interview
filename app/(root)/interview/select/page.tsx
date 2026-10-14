@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/actions/auth.action";
-import SubjectSelector from "@/components/SubjectSelector";
+import InterviewSetup from "@/components/InterviewSetup";
 
-const SelectInterviewPage = async () => {
+const SelectInterviewPage = async ({ searchParams }: { searchParams: Promise<{ subject?: string }> }) => {
+  const { subject } = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
 
@@ -13,11 +14,11 @@ const SelectInterviewPage = async () => {
           E&TC Mock Interview
         </h1>
         <p className="text-light-100 text-lg max-w-2xl mx-auto">
-          Practice with an AI interviewer specialized in Electronics &amp; Telecommunication engineering topics
+          Configure your AI interview session — choose your mode, subject, and difficulty
         </p>
       </div>
 
-      <SubjectSelector userId={user.id} userName={user.name} />
+      <InterviewSetup userId={user.id} userName={user.name} initialSubject={subject} />
     </div>
   );
 };

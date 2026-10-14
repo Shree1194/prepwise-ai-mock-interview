@@ -1,6 +1,23 @@
-// E&TC Subject Definitions and Questions for Mock Interviews
+// ─── E&TC Subjects — backward-compatible re-export ───────────────────────────
+// All subject data now lives in data/subjects/index.ts.
+// This file re-exports everything so existing imports continue to work.
 
-export interface ETCSubject {
+export type { ETCSubjectData as ETCSubject } from "@/data/subjects";
+export {
+  ETC_SUBJECTS,
+  getSubjectById,
+  getSubjectsByCategory,
+  getTopicNamesForSubject,
+  buildSubjectContextPrompt,
+} from "@/data/subjects";
+
+// ── Legacy shape (used by SubjectSelector, home page) ─────────────────────────
+// The old ETCSubject had a flat `topics: string[]`. We expose a mapped list
+// to satisfy existing components that destructure `subject.topics` as strings.
+
+import { ETC_SUBJECTS } from "@/data/subjects";
+
+export interface LegacyETCSubject {
   id: string;
   name: string;
   icon: string;
@@ -9,121 +26,18 @@ export interface ETCSubject {
   topics: string[];
 }
 
-export const etcSubjects: ETCSubject[] = [
-  {
-    id: "digital-communication",
-    name: "Digital Communication",
-    icon: "📡",
-    color: "#6366f1",
-    description: "Modulation, coding, digital transmission techniques",
-    topics: [
-      "PCM & Delta Modulation",
-      "ASK, FSK, PSK, QPSK",
-      "Shannon's theorem",
-      "Error detection & correction",
-      "Spread spectrum",
-      "OFDM basics",
-    ],
-  },
-  {
-    id: "analog-communication",
-    name: "Analog Communication",
-    icon: "📻",
-    color: "#8b5cf6",
-    description: "AM, FM, PM modulation and demodulation techniques",
-    topics: [
-      "AM modulation & demodulation",
-      "FM & PM modulation",
-      "Superheterodyne receivers",
-      "Noise in communication",
-      "Bandwidth and sensitivity",
-      "SSB & DSB methods",
-    ],
-  },
-  {
-    id: "signals-systems",
-    name: "Signals & Systems",
-    icon: "〰️",
-    color: "#06b6d4",
-    description: "Fourier, Laplace, Z-transforms and system analysis",
-    topics: [
-      "Fourier Series & Transform",
-      "Laplace Transform",
-      "Z-Transform",
-      "Convolution & Correlation",
-      "LTI Systems",
-      "Sampling theorem",
-    ],
-  },
-  {
-    id: "microcontrollers",
-    name: "Microcontrollers",
-    icon: "🔲",
-    color: "#10b981",
-    description: "8051 architecture, ARM basics, embedded C programming",
-    topics: [
-      "8051 architecture & registers",
-      "ARM Cortex basics",
-      "Timer & Counter programming",
-      "Interrupts & ISR",
-      "Serial communication (UART)",
-      "I2C & SPI protocols",
-    ],
-  },
-  {
-    id: "embedded-systems",
-    name: "Embedded Systems",
-    icon: "⚙️",
-    color: "#f59e0b",
-    description: "RTOS, hardware-software co-design, real-time systems",
-    topics: [
-      "RTOS concepts",
-      "Task scheduling",
-      "Memory management",
-      "Device drivers",
-      "Watchdog timers",
-      "Power management",
-    ],
-  },
-  {
-    id: "basic-electronics",
-    name: "Basic Electronics",
-    icon: "⚡",
-    color: "#ef4444",
-    description: "Diodes, transistors, op-amps and analog circuits",
-    topics: [
-      "Diode characteristics & circuits",
-      "BJT biasing & amplifiers",
-      "FET & MOSFET",
-      "Op-Amp circuits",
-      "Oscillators",
-      "Filters (active & passive)",
-    ],
-  },
-  {
-    id: "software-engineering",
-    name: "Software Engineering",
-    icon: "💻",
-    color: "#3b82f6",
-    description: "Data Structures, Algorithms, Databases, and OS basics",
-    topics: [
-      "Data Structures & Algorithms",
-      "Object-Oriented Programming",
-      "Database Management Systems",
-      "Operating Systems",
-      "Computer Networks",
-      "Web Technologies",
-    ],
-  },
-  {
-    id: "mixed",
-    name: "Mixed (Random)",
-    icon: "🔀",
-    color: "#ec4899",
-    description: "Random questions from all E&TC subjects",
-    topics: ["All topics combined"],
-  },
-];
+export const etcSubjects: LegacyETCSubject[] = ETC_SUBJECTS.map((s) => ({
+  id: s.id,
+  name: s.name,
+  icon: s.icon,
+  color: s.color,
+  description: s.description,
+  topics: s.topics.map((t) => t.name),
+}));
+
+// ── Question bank ─────────────────────────────────────────────────────────────
+// Static fallback questions kept for the legacy flow.
+// The AI question generator in vapi/generate/route.ts is the primary path.
 
 export const etcQuestionBank: Record<string, string[]> = {
   "digital-communication": [
@@ -138,7 +52,7 @@ export const etcQuestionBank: Record<string, string[]> = {
     "Describe the working of a matched filter receiver.",
     "What is the Nyquist sampling theorem? What happens if sampling frequency is below Nyquist rate?",
   ],
-  "analog-communication": [
+  "communication-engineering": [
     "What is amplitude modulation? Derive the expression for a standard AM wave.",
     "What is the modulation index in AM? What happens if modulation index exceeds 1?",
     "Explain FM modulation. How is it different from AM in terms of noise immunity?",
@@ -162,12 +76,12 @@ export const etcQuestionBank: Record<string, string[]> = {
     "Differentiate between energy signals and power signals with examples.",
     "What is impulse response? How does it characterize an LTI system?",
   ],
-  microcontrollers: [
-    "Describe the architecture of the 8051 microcontroller.",
+  "microprocessors": [
+    "Describe the architecture of the 8085 microprocessor.",
     "What is the difference between a microcontroller and a microprocessor?",
     "Explain the register set of the 8051 microcontroller.",
     "How do timers work in the 8051? What are the different timer modes?",
-    "What are interrupts? Explain the interrupt structure of 8051.",
+    "What are interrupts? Explain the interrupt structure of 8085.",
     "What is UART communication? How is it configured in 8051?",
     "Explain the difference between I2C and SPI protocols.",
     "What is PWM? How can it be generated using a microcontroller?",
@@ -186,7 +100,7 @@ export const etcQuestionBank: Record<string, string[]> = {
     "What is bootloader? What is its role in embedded systems?",
     "How do you approach power optimization in an embedded system design?",
   ],
-  "basic-electronics": [
+  "analog-electronics": [
     "Explain the working of a PN junction diode.",
     "What is the difference between a Zener diode and a regular diode? What is Zener breakdown?",
     "Describe the three configurations of a BJT transistor and their characteristics.",
@@ -198,7 +112,19 @@ export const etcQuestionBank: Record<string, string[]> = {
     "Explain the difference between active and passive filters.",
     "What is feedback in amplifiers? Explain positive and negative feedback.",
   ],
-  "software-engineering": [
+  "digital-electronics": [
+    "What is the difference between a combinational and sequential circuit?",
+    "Explain K-map minimization for a 4-variable Boolean function.",
+    "What are the different types of flip-flops? Explain JK flip-flop operation.",
+    "Design a 3-bit binary counter using JK flip-flops.",
+    "What is the difference between a multiplexer and a demultiplexer?",
+    "Explain the working of a full adder circuit.",
+    "What is a Mealy machine? How does it differ from a Moore machine?",
+    "What are universal gates? Prove that NAND is a universal gate.",
+    "Explain setup time and hold time of a flip-flop.",
+    "What is metastability in sequential circuits and how is it handled?",
+  ],
+  "data-structures": [
     "What is the difference between an Array and a Linked List? When would you use one over the other?",
     "Explain the four main pillars of Object-Oriented Programming (OOP).",
     "What are the primary differences between SQL and NoSQL databases?",
@@ -214,12 +140,10 @@ export const etcQuestionBank: Record<string, string[]> = {
 
 export function getQuestionsForSubject(subjectId: string, count: number = 5): string[] {
   if (subjectId === "mixed") {
-    // Get questions from all subjects
     const allQuestions: string[] = [];
-    Object.entries(etcQuestionBank).forEach(([, questions]) => {
+    Object.values(etcQuestionBank).forEach((questions) => {
       allQuestions.push(...questions);
     });
-    // Shuffle and return count questions
     return shuffleArray(allQuestions).slice(0, count);
   }
 

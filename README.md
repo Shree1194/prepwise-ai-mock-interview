@@ -19,6 +19,48 @@
     </div>
 </div>
 
+> **Project status:** PrepWise is a local interview and engineering-practice workspace. Production use still requires verified Firebase Storage/index permissions, configured voice and AI providers, and a private isolated code runner. See [DEPLOYMENT.md](./DEPLOYMENT.md) for setup and current blockers. Visual review and responsive browser captures are documented in [Phase 2 design evidence](./docs/qa/phase2-design-evidence.md).
+
+## Release readiness
+
+This full-stack E&TC interview-practice application uses Next.js and TypeScript, Firebase Authentication and Firestore, schema-validated AI provider fallback, Vapi voice workflow integration, resume analysis, PDF reports, and a Monaco coding workspace. Owner-scoped server actions and request validation protect user data. The configured UI and service integrations do not establish that external workflows have been verified; code execution remains disabled until a private sandbox is reviewed. See [Integration readiness](./docs/INTEGRATION_READINESS.md) for evidence and blockers.
+
+**Portfolio description:** Built a full-stack interview preparation platform with Firebase authentication and owner-scoped history, AI-generated engineering interview questions and transcript feedback, resume analysis, PDF reports, and a Monaco coding practice workspace. Added server-side input validation, provider timeouts/fallbacks, and a disabled-by-default execution boundary; live integrations and deployment requirements are explicitly documented.
+
+### Architecture and request flow
+
+```mermaid
+flowchart LR
+  B[Browser: Next.js UI, Firebase Auth, Vapi SDK] -->|ID token exchange, then HttpOnly session cookie| N[Next.js server actions and API routes]
+  N -->|verify session and owner| A[Firebase Admin]
+  A --> F[(Firestore: interviews, feedback, resumes)]
+  N -->|structured output with timeout/fallback| AI[Configured AI provider]
+  B -->|voice session; public scoped token| V[Vapi workflow]
+  N -->|authenticated, validated request| J[Private Judge0: disabled until verified]
+```
+
+The interview flow creates questions on the server, runs the browser voice session through Vapi, submits the captured transcript for feedback, then saves owner-scoped results to Firestore for history and PDF export. Resume PDFs are parsed by the authenticated app route; extracted text and analysis are saved to Firestore. The original PDF is not persisted in Firebase Storage by the current upload flow.
+
+### Verified scope and recruiter demo
+
+- **Verified locally:** authentication and interview pages render; owner-isolation and malformed-input tests; feedback failure does not invent scores; PDF generation; code execution returns an honest unavailable response while disabled; desktop/tablet/mobile UI states are captured in `docs/qa`.
+- **Verified live:** a synthetic structured-output smoke request to Gemini; earlier recorded Firebase Auth and Firestore create/read/delete checks. These do not verify the complete voice interview, AI-feedback, resume, or history journeys against staging.
+- **Blocked or intentionally disabled:** Firebase Storage write/delete and index deployment need authorized staging setup; Vapi and complete AI feedback/resume workflows need valid provider setup; arbitrary code execution stays disabled pending private sandbox verification. See the readiness matrix for feature-by-feature status.
+
+For a recruiter demonstration, use a configured staging account and show: sign in and session persistence; interview setup and question generation; a Vapi call only if the workflow and microphone are ready; saved transcript/feedback and history reopening; PDF download; a synthetic resume upload only with consent; coding problem selection and AI review; and the clear executor-unavailable state. Do not present mocks, static captures, or configuration checks as live provider results.
+
+Current release-candidate checks and feature classifications are recorded in [Phase 4 QA evidence](./docs/qa/phase4-release-evidence.md).
+
+### Application screenshots
+
+| Desktop: coding practice | Mobile: coding practice | Desktop: overview |
+|---|---|---|
+| ![Coding practice at desktop width](docs/qa/phase2-coding-after-1440.png) | ![Coding practice at mobile width](docs/qa/phase2-coding-after-375.png) | ![PrepWise overview at desktop width](docs/qa/phase2-overview-1440.png) |
+
+| Current sign-in: desktop | Current sign-in: mobile | Current sign-up: mobile |
+|---|---|---|
+| ![Sign-in at 1440 px](docs/qa/phase4-signin-desktop.png) | ![Sign-in at 390 px](docs/qa/phase4-signin-mobile.png) | ![Sign-up at 390 px](docs/qa/phase4-signup-mobile.png) |
+
 ## 📋 <a name="table">Table of Contents</a>
 
 1. 🤖 [Introduction](#introduction)
@@ -52,22 +94,22 @@ If you're getting started and need assistance or face any bugs, join our active 
 - Tailwind CSS
 - Vapi AI
 - shadcn/ui
-- Google Gemeni
+- Google Gemini
 - Zod
 
 ## <a name="features">🔋 Features</a>
 
 👉 **Authentication**: Sign Up and Sign In using password/email authentication handled by Firebase.
 
-👉 **Create Interviews**: Easily generate job interviews with help of Vapi voice assistants and Google Gemini.
+👉 **Interview preparation**: Generate structured question sets through the configured server-side AI provider. A complete voice session requires a working Vapi workflow and microphone permission.
 
-👉 **Get feedback from AI**: Take the interview with AI voice agent, and receive instant feedback based on your conversation.
+👉 **Interview feedback**: Submit a captured transcript for schema-validated AI feedback. End-to-end live feedback depends on the configured provider and a completed interview transcript.
 
 👉 **Modern UI/UX**: A sleek and user-friendly interface designed for a great experience.
 
-👉 **Interview Page**: Conduct AI-driven interviews with real-time feedback and detailed transcripts.
+👉 **Interview history**: Review saved interview and feedback records for the signed-in owner when Firebase access and required indexes are ready.
 
-👉 **Dashboard**: Manage and track all your interviews with easy navigation.
+👉 **Dashboard and practice areas**: Navigate interview, resume, coding, and progress workspaces. Code execution remains unavailable until a private sandbox is verified.
 
 👉 **Responsiveness**: Fully responsive design that works seamlessly across devices.
 
@@ -77,59 +119,55 @@ and many more, including code architecture and reusability
 
 Follow these steps to set up the project locally on your machine.
 
+For production infrastructure, Firebase rules, Docker/Vercel deployment, Judge0 setup, and current blockers, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
 **Prerequisites**
 
 Make sure you have the following installed on your machine:
 
 - [Git](https://git-scm.com/)
-- [Node.js](https://nodejs.org/en)
+- [Node.js 22 or newer](https://nodejs.org/en)
 - [npm](https://www.npmjs.com/) (Node Package Manager)
 
 **Cloning the Repository**
 
 ```bash
-git clone https://github.com/adrianhajdin/ai_mock_interviews.git
-cd ai_mock_interviews
+git clone https://github.com/Shree1194/prepwise-interviewer.git
+cd prepwise-interviewer
 ```
 
 **Installation**
 
-Install the project dependencies using npm:
+Install the project dependencies with the committed lockfile:
 
 ```bash
-npm install
+npm ci
 ```
 
 **Set Up Environment Variables**
 
-Create a new file named `.env.local` in the root of your project and add the following content:
+Copy the placeholder environment file, then configure Firebase client and Admin credentials and at least one AI provider key:
 
-```env
-NEXT_PUBLIC_VAPI_WEB_TOKEN=
-NEXT_PUBLIC_VAPI_WORKFLOW_ID=
-
-GOOGLE_GENERATIVE_AI_API_KEY=
-
-NEXT_PUBLIC_BASE_URL=
-
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
-
-FIREBASE_PROJECT_ID=
-FIREBASE_CLIENT_EMAIL=
-FIREBASE_PRIVATE_KEY=
+```powershell
+Copy-Item .env.example .env.local
 ```
 
-Replace the placeholder values with your actual **[Firebase](https://firebase.google.com/)**, **[Vapi](https://vapi.ai/?utm_source=youtube&utm_medium=video&utm_campaign=jsmastery_recruitingpractice&utm_content=paid_partner&utm_term=recruitingpractice)** credentials.
+Never put Firebase Admin or AI provider secrets in `NEXT_PUBLIC_*` variables. Configure Firebase email/password authentication and Firestore before using authenticated features. Live Vapi sessions need `NEXT_PUBLIC_VAPI_WEB_TOKEN`; generated-workflow mode also needs `NEXT_PUBLIC_VAPI_WORKFLOW_ID`. Code execution remains disabled until a private, isolated Judge0 service has been verified and explicitly enabled. See [`.env.example`](./.env.example) and [DEPLOYMENT.md](./DEPLOYMENT.md) for all setup steps and current blockers.
 
 **Running the Project**
 
 ```bash
 npm run dev
+```
+
+Run the local regression checks and production build with:
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm audit --omit=dev --audit-level=high
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser to view the project.

@@ -1,13 +1,7 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -17,8 +11,28 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
+const requiredClientConfig = [
+  ["NEXT_PUBLIC_FIREBASE_API_KEY", firebaseConfig.apiKey],
+  ["NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", firebaseConfig.authDomain],
+  ["NEXT_PUBLIC_FIREBASE_PROJECT_ID", firebaseConfig.projectId],
+  ["NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", firebaseConfig.storageBucket],
+  [
+    "NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+    firebaseConfig.messagingSenderId,
+  ],
+  ["NEXT_PUBLIC_FIREBASE_APP_ID", firebaseConfig.appId],
+] as const;
+
+const missingClientEnv = requiredClientConfig
+  .filter(([, value]) => !value)
+  .map(([name]) => name);
+
+if (missingClientEnv.length > 0) {
+  throw new Error(
+    `Missing required Firebase client env vars: ${missingClientEnv.join(", ")}`
+  );
+}
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const auth = getAuth(app);
 export const db = getFirestore(app);

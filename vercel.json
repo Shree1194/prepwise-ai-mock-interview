@@ -1,0 +1,23 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm ci --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "regions": ["iad1"],
+  "functions": {
+    "app/api/resume/parse/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/coding/execute/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/coding/review/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/vapi/generate/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/health/route.ts": {
+      "maxDuration": 15
+    }
+  }
+}

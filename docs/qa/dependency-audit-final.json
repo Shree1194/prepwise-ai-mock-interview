@@ -1,0 +1,47 @@
+{
+    "auditReportVersion":  2,
+    "vulnerabilities":  {
+                            "@next/eslint-plugin-next":  {
+                                                             "name":  "@next/eslint-plugin-next",
+                                                             "severity":  "high",
+                                                             "isDirect":  true,
+                                                             "nodes":  [
+                                                                           "node_modules/@next/eslint-plugin-next"
+                                                                       ]
+                                                         },
+                            "braces":  {
+                                           "name":  "braces",
+                                           "severity":  "high",
+                                           "isDirect":  false,
+                                           "nodes":  [
+                                                         "node_modules/braces"
+                                                     ]
+                                       },
+                            "fast-glob":  {
+                                              "name":  "fast-glob",
+                                              "severity":  "high",
+                                              "isDirect":  false,
+                                              "nodes":  [
+                                                            "node_modules/@next/eslint-plugin-next/node_modules/fast-glob"
+                                                        ]
+                                          },
+                            "micromatch":  {
+                                               "name":  "micromatch",
+                                               "severity":  "high",
+                                               "isDirect":  false,
+                                               "nodes":  [
+                                                             "node_modules/micromatch"
+                                                         ]
+                                           }
+                        },
+    "metadata":  {
+                     "vulnerabilities":  {
+                                             "info":  0,
+                                             "low":  0,
+                                             "moderate":  0,
+                                             "high":  4,
+                                             "critical":  0,
+                                             "total":  4
+                                         }
+                 }
+}
